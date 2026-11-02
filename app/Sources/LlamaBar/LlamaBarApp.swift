@@ -6,6 +6,7 @@ struct LlamaBarApp: App {
     private let usage: UsageMonitor
     private let library: ModelLibrary
     private let configuration: ServerConfiguration
+    private let updater: Updater
 
     init() {
         // Before anything reads .env or runs a script from the runtime.
@@ -18,12 +19,13 @@ struct LlamaBarApp: App {
         usage = UsageMonitor()
         library = ModelLibrary()
         configuration = ServerConfiguration()
+        updater = Updater()
         server.start()
     }
 
     var body: some Scene {
         MenuBarExtra {
-            MenuPanel(server: server, usage: usage)
+            MenuPanel(server: server, usage: usage, updater: updater)
         } label: {
             MenuBarLabel(server: server)
         }

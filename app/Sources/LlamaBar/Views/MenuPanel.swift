@@ -4,6 +4,7 @@ import SwiftUI
 struct MenuPanel: View {
     let server: ServerMonitor
     let usage: UsageMonitor
+    let updater: Updater
 
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismiss) private var dismissPanel
@@ -46,6 +47,12 @@ struct MenuPanel: View {
             PanelAction("Show Server Log", systemImage: "doc.text") {
                 dismissPanel()
                 Desktop.showServerLog()
+            }
+            if updater.isEnabled {
+                PanelAction("Check for Updates…", systemImage: "arrow.down.app") {
+                    dismissPanel()
+                    updater.checkForUpdates()
+                }
             }
             Divider().padding(.vertical, 4)
             PanelAction("Quit Llama Bar", systemImage: "power") { NSApp.terminate(nil) }

@@ -44,6 +44,11 @@ Llama Bar is an independent project and is not affiliated with Ollama or OpenCod
 
 Its scripts and settings live in `~/Library/Application Support/Llama Bar`.
 
+Downloads update themselves: Llama Bar checks GitHub for a new release once a day and
+offers to install it, or choose **Check for Updates…** in the menu bar panel. Updates are
+verified with the release's signing key before they install, and keep your settings. Versions
+before 1.1.0 can't update themselves; download the latest release once to get updates.
+
 ### Build from source
 
 ```sh
@@ -62,7 +67,7 @@ A source build drives the clone it was built from, so keep the clone in place (o
 **Menu bar panel.** Shows whether Ollama is running, which models are loaded (with an eject
 button to unload), and OpenCode usage from `opencode stats`: sessions, prompts, and tokens per
 model. Actions: open OpenCode in iTerm or Terminal, open the Configuration Manager, restart the
-Ollama server, show the server log.
+Ollama server, show the server log, and (downloads only) check for updates.
 
 **Configuration Manager.**
 
@@ -123,16 +128,29 @@ lock the account.
 
 ```sh
 xcrun notarytool store-credentials llama-bar --key AuthKey_<KEYID>.p8 --key-id <KEYID> --issuer <ISSUER_ID>
-bin/build-app --release 1.0.0                 # signs, notarizes, writes dist/Llama-Bar-1.0.0.zip
-gh release create v1.0.0 dist/Llama-Bar-1.0.0.zip --generate-notes
+bin/release 1.1.0     # signs, notarizes, writes the zip and appcast.xml, publishes GitHub release v1.1.0
 ```
+
+Updates use [Sparkle](https://sparkle-project.org). Installed apps read `appcast.xml` from
+the latest GitHub release and only install archives signed with the update key, which lives
+in the maintainer's login keychain (account `llama-bar`). Back it up; without it, installed
+copies can't be updated:
+
+```sh
+app/.build/artifacts/sparkle/Sparkle/bin/generate_keys --account llama-bar -x llama-bar-update-key   # export
+app/.build/artifacts/sparkle/Sparkle/bin/generate_keys --account llama-bar -f llama-bar-update-key   # restore
+```
+
+Every release must include `appcast.xml`; `bin/release` uploads it. A release without it
+leaves installed copies unable to find later updates until one with it is published.
 
 | Path | Purpose |
 |---|---|
 | `app/` | SwiftUI menu bar app (Swift package) |
 | `bin/setup` | Installs dependencies and pulls the default model |
 | `bin/configure-server` | Renders the LaunchAgent from `.env` and restarts Ollama |
-| `bin/build-app` | Builds and installs `Llama Bar.app`, or packages a notarized release |
+| `bin/build-app` | Builds and installs `Llama Bar.app`, or packages a notarized release and its update feed |
+| `bin/release` | Publishes a release to GitHub with its update feed |
 | `bin/uninstall` | Removes the app, LaunchAgent, and settings |
 | `bin/opencode-ollama` | OpenCode launcher; generates its config from installed models |
 | `opencode/` | OpenCode config template and generator |

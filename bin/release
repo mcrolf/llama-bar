@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Publish a Llama Bar release: build the notarized app and its update feed, then upload both
+# to a new GitHub release. Installed copies find it through the feed on their next check.
+#
+#   bin/release <version>    e.g. bin/release 1.1.0, tagged v1.1.0
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+VERSION="${1:?usage: bin/release <version>}"
+
+"$ROOT/bin/build-app" --release "$VERSION"
+gh release create "v$VERSION" \
+  "$ROOT/dist/Llama-Bar-$VERSION.zip" \
+  "$ROOT/dist/appcast.xml" \
+  --title "Llama Bar $VERSION" \
+  --generate-notes

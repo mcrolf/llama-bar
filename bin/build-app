@@ -4,12 +4,14 @@
 #   bin/build-app [--no-open]         Install ~/Applications/Llama Bar.app (override with
 #                                     INSTALL_DIR), ad hoc signed, driving this checkout.
 #   bin/build-app --release <version> Write dist/Llama-Bar-<version>.zip: self-contained,
-#                                     Developer ID signed and notarized, for GitHub releases.
+#                                     Developer ID signed and notarized, for GitHub releases,
+#                                     and dist/appcast.xml, the update feed that announces it.
 #
-# Releases need a Developer ID Application certificate (override with SIGNING_IDENTITY)
-# and notarytool credentials saved as the keychain profile NOTARY_PROFILE (default
+# Releases need a Developer ID Application certificate (override with SIGNING_IDENTITY),
+# notarytool credentials saved as the keychain profile NOTARY_PROFILE (default
 # "llama-bar"), preferably from an App Store Connect API key:
 #   xcrun notarytool store-credentials llama-bar --key <AuthKey.p8> --key-id <id> --issuer <issuer>
+# and the Sparkle update signing key in the keychain (see UPDATE_KEY_ACCOUNT below).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
@@ -20,6 +22,17 @@ ICON_SCRIPT="$PACKAGE/scripts/make-icon.swift"
 ICON_CACHE="$PACKAGE/.build/AppIcon.icns"
 LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 NOTARY_PROFILE="${NOTARY_PROFILE:-llama-bar}"
+SPARKLE_TOOLS="$PACKAGE/.build/artifacts/sparkle/Sparkle/bin"
+# Installed apps only accept updates signed by the private half of UPDATE_PUBLIC_KEY, which
+# generate_keys stored in the login keychain under UPDATE_KEY_ACCOUNT. Losing that key
+# strands every installed copy on its current version: back it up with
+#   app/.build/artifacts/sparkle/Sparkle/bin/generate_keys --account llama-bar -x <file>
+UPDATE_KEY_ACCOUNT=llama-bar
+UPDATE_PUBLIC_KEY="1YQ79qCcKeu4ynC9b8yTioYvxa6YandrLmJUvup85VY="
+# Override only to test updates against a local server laid out like GitHub releases.
+RELEASES_URL="${RELEASES_URL:-https://github.com/mcrolf/llama-bar/releases}"
+# Always the newest release's copy, so the feed needs no hosting beyond GitHub releases.
+FEED_URL="$RELEASES_URL/latest/download/appcast.xml"
 # What a release copies into the app; see BundledRuntime.swift.
 RUNTIME_FILES=(
   .env.example
@@ -52,7 +65,7 @@ install_local() {
   local staged
   staged="$(assemble_bundle 1.0.0)"
   plutil -insert LlamaBarRoot -string "$ROOT" "$staged/Contents/Info.plist"
-  codesign --force --sign - "$staged"
+  sign_bundle "$staged" --sign -
 
   mkdir -p "$install_dir"
   quit_running_app
@@ -71,8 +84,9 @@ package_release() {
   local staged
   staged="$(assemble_bundle "$version")"
   copy_runtime "$staged/Contents/Resources/runtime"
-  codesign --force --options runtime --timestamp --sign "$identity" "$staged"
-  codesign --verify --strict --verbose=2 "$staged"
+  enable_updates "$staged/Contents/Info.plist"
+  sign_bundle "$staged" --options runtime --timestamp --sign "$identity"
+  codesign --verify --deep --strict --verbose=2 "$staged"
 
   notarize "$staged"
   mkdir -p "$ROOT/dist"
@@ -80,7 +94,43 @@ package_release() {
   rm -f "$archive"
   ditto -c -k --keepParent "$staged" "$archive"
   spctl --assess --type execute --verbose=2 "$staged"
-  echo "Release: $archive"
+  write_appcast "$archive" "$version"
+  echo "Release: $archive and $ROOT/dist/appcast.xml"
+}
+
+# Only release builds get a feed; Updater.swift leaves updates off without one.
+enable_updates() {
+  local plist="$1"
+  plutil -insert SUFeedURL -string "$FEED_URL" "$plist"
+  plutil -insert SUPublicEDKey -string "$UPDATE_PUBLIC_KEY" "$plist"
+  plutil -insert SUEnableAutomaticChecks -bool true "$plist"
+}
+
+# The feed lists only this release; older apps read it and update straight to it. It is
+# generated in an empty folder because generate_appcast merges into an existing feed.
+# generate_appcast also checks that the archive's SUPublicEDKey matches the keychain key.
+write_appcast() {
+  local archive="$1" version="$2" archives="$WORK/appcast"
+  mkdir -p "$archives"
+  cp "$archive" "$archives/"
+  "$SPARKLE_TOOLS/generate_appcast" "$archives" \
+    --account "$UPDATE_KEY_ACCOUNT" \
+    --download-url-prefix "$RELEASES_URL/download/v$version/" \
+    --link "$RELEASES_URL"
+  cp "$archives/appcast.xml" "$ROOT/dist/appcast.xml"
+}
+
+# Nested code is signed before what contains it. Sparkle's Downloader service is
+# sandboxed, so it keeps its entitlements.
+sign_bundle() {
+  local app="$1"; shift
+  local sparkle="$app/Contents/Frameworks/Sparkle.framework"
+  local sparkle_version="$sparkle/Versions/B"
+  codesign --force "$@" "$sparkle_version/XPCServices/Installer.xpc"
+  codesign --force "$@" --preserve-metadata=entitlements "$sparkle_version/XPCServices/Downloader.xpc"
+  codesign --force "$@" "$sparkle_version/Autoupdate" "$sparkle_version/Updater.app"
+  codesign --force "$@" "$sparkle"
+  codesign --force "$@" "$app"
 }
 
 signing_identity() {
@@ -111,8 +161,9 @@ assemble_bundle() {
   swift build -c release --package-path "$PACKAGE" >&2
   build_icon >&2
 
-  mkdir -p "$bundle/Contents/MacOS" "$bundle/Contents/Resources"
+  mkdir -p "$bundle/Contents/MacOS" "$bundle/Contents/Resources" "$bundle/Contents/Frameworks"
   cp "$bin_dir/$PROCESS_NAME" "$bundle/Contents/MacOS/$PROCESS_NAME"
+  ditto "$bin_dir/Sparkle.framework" "$bundle/Contents/Frameworks/Sparkle.framework"
   cp "$ICON_CACHE" "$bundle/Contents/Resources/AppIcon.icns"
   write_info_plist "$bundle/Contents/Info.plist" "$version"
   echo "$bundle"

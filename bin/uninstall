@@ -14,4 +14,6 @@ launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
 rm -f "$HOME/Library/LaunchAgents/$LABEL.plist"
 [[ -L "$LINK" ]] && rm "$LINK"
 rm -rf "$HOME/Library/Logs/llama-bar" "$HOME/Library/Application Support/Llama Bar"
+rm -rf "$HOME/Library/Caches/com.mcrolf.llama-bar"
+defaults delete com.mcrolf.llama-bar 2>/dev/null || true
 echo "Llama Bar removed. Ollama, OpenCode and your models are still installed."

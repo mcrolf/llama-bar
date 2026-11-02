@@ -113,9 +113,12 @@ LLAMA_BAR_ROOT=$PWD swift run --package-path app   # run the app without bundlin
 ```
 
 Releases (maintainer): save notarization credentials once, then build, tag, and upload.
+Use an App Store Connect API key (Users and Access > Integrations > App Store Connect API,
+a Team key with the Developer role) rather than an Apple ID: failed Apple ID sign-ins can
+lock the account.
 
 ```sh
-xcrun notarytool store-credentials llama-bar --apple-id <apple-id> --team-id <team-id>
+xcrun notarytool store-credentials llama-bar --key AuthKey_<KEYID>.p8 --key-id <KEYID> --issuer <ISSUER_ID>
 bin/build-app --release 1.0.0                 # signs, notarizes, writes dist/Llama-Bar-1.0.0.zip
 gh release create v1.0.0 dist/Llama-Bar-1.0.0.zip --generate-notes
 ```

@@ -8,7 +8,8 @@
 #
 # Releases need a Developer ID Application certificate (override with SIGNING_IDENTITY)
 # and notarytool credentials saved as the keychain profile NOTARY_PROFILE (default
-# "llama-bar"): xcrun notarytool store-credentials llama-bar --apple-id <id> --team-id <team>
+# "llama-bar"), preferably from an App Store Connect API key:
+#   xcrun notarytool store-credentials llama-bar --key <AuthKey.p8> --key-id <id> --issuer <issuer>
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
@@ -94,7 +95,7 @@ notarize() {
   local app="$1" submission="$WORK/notarize.zip"
   if ! xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1; then
     echo "No notarytool credentials named '$NOTARY_PROFILE'. Save them once with:" >&2
-    echo "  xcrun notarytool store-credentials $NOTARY_PROFILE --apple-id <apple-id> --team-id <team-id>" >&2
+    echo "  xcrun notarytool store-credentials $NOTARY_PROFILE --key <AuthKey.p8> --key-id <key-id> --issuer <issuer-id>" >&2
     exit 1
   fi
   ditto -c -k --keepParent "$app" "$submission"

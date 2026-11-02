@@ -1,0 +1,23 @@
+# Optional CPU-only fallback (Docker on macOS has no GPU access). Do not run
+# alongside the native LaunchAgent: both bind 127.0.0.1:11434.
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: llama-bar-ollama
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    environment:
+      # Agent system prompts plus tool schemas exceed Ollama's small default window.
+      OLLAMA_CONTEXT_LENGTH: "${OLLAMA_CONTEXT_LENGTH:-32768}"
+      OLLAMA_KEEP_ALIVE: "${OLLAMA_KEEP_ALIVE:-30m}"
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  ollama-models:

@@ -1,0 +1,6 @@
+.env
+opencode/opencode.generated.json
+app/.build/
+.swiftpm/
+__pycache__/
+.DS_Store

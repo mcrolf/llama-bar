@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# OpenCode launcher used by T3 Code. Exposes every model pulled into the
+# local Ollama server as an OpenCode provider, then hands off to `opencode`.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+[[ -f "$ROOT/.env" ]] && set -a && source "$ROOT/.env" && set +a
+OLLAMA_URL="${OLLAMA_URL:-http://127.0.0.1:11434}"
+CONFIG_FILE="$ROOT/opencode/opencode.generated.json"
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+
+ensure_ollama_running() {
+  curl -fsS -m 2 "$OLLAMA_URL/api/version" >/dev/null 2>&1 && return
+  launchctl kickstart "gui/$(id -u)/com.mcrolf.llama-bar.ollama" >/dev/null 2>&1 || return 0
+  for _ in $(seq 1 20); do
+    curl -fsS -m 2 "$OLLAMA_URL/api/version" >/dev/null 2>&1 && return
+    sleep 0.5
+  done
+}
+
+# Refresh the model list for the T3 server and the interactive TUI only; other
+# subcommands (stats, --version) must stay fast.
+if [[ "${1:-}" == "serve" || $# -eq 0 ]]; then
+  ensure_ollama_running
+  python3 "$ROOT/opencode/generate_config.py" "$OLLAMA_URL" "$CONFIG_FILE" "${OLLAMA_MODEL:-}" || true
+fi
+
+[[ -f "$CONFIG_FILE" ]] || cp "$ROOT/opencode/opencode.json" "$CONFIG_FILE"
+export OPENCODE_CONFIG="$CONFIG_FILE"
+exec opencode "$@"

@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Install native Ollama (Metal GPU), run it as a LaunchAgent, pull the default
+# model, and expose the `opencode-ollama` launcher used by T3 Code.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+[[ -f "$ROOT/.env" ]] && set -a && source "$ROOT/.env" && set +a
+MODEL="${OLLAMA_MODEL:-devstral-small-2:24b}"
+LINK_DIR="${LINK_DIR:-$HOME/.local/bin}"
+LOG_DIR="$HOME/Library/Logs/llama-bar"
+
+command -v brew >/dev/null || { echo "Homebrew is required: https://brew.sh" >&2; exit 1; }
+command -v ollama >/dev/null || brew install ollama
+command -v opencode >/dev/null || brew install opencode
+brew services stop ollama >/dev/null 2>&1 || true
+
+"$ROOT/bin/configure-server"
+ollama pull "$MODEL"
+
+mkdir -p "$LINK_DIR"
+ln -sf "$ROOT/bin/opencode-ollama" "$LINK_DIR/opencode-ollama"
+echo "Ollama running natively (logs: $LOG_DIR/ollama.log). Launcher: $LINK_DIR/opencode-ollama"

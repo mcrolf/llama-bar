@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Render the Ollama LaunchAgent from .env and (re)start it. Run by bin/setup and
+# by the menu bar app after server settings change. Restarting unloads models.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+[[ -f "$ROOT/.env" ]] && set -a && source "$ROOT/.env" && set +a
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+LABEL="com.mcrolf.llama-bar.ollama"
+PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
+LOG_DIR="$HOME/Library/Logs/llama-bar"
+
+api_responds() { curl -fsS -m 2 http://127.0.0.1:11434/api/version >/dev/null 2>&1; }
+
+# A server still answering after bootout belongs to someone else (Ollama.app or
+# `brew services`); the LaunchAgent would fail to bind and this script would
+# silently talk to that server instead.
+ensure_port_free() {
+  for _ in $(seq 1 10); do api_responds || return 0; sleep 0.5; done
+  echo "Another Ollama server is using 127.0.0.1:11434. Quit the Ollama app (or run" >&2
+  echo "'brew services stop ollama'), then rerun $0." >&2
+  exit 1
+}
+
+mkdir -p "$LOG_DIR" "$(dirname "$PLIST")"
+sed -e "s|__OLLAMA_BIN__|$(command -v ollama)|" \
+    -e "s|__OLLAMA_CONTEXT_LENGTH__|${OLLAMA_CONTEXT_LENGTH:-32768}|" \
+    -e "s|__OLLAMA_KEEP_ALIVE__|${OLLAMA_KEEP_ALIVE:-30m}|" \
+    -e "s|__LOG_DIR__|$LOG_DIR|" \
+    "$ROOT/launchd/$LABEL.plist.template" > "$PLIST"
+launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
+ensure_port_free
+launchctl bootstrap "gui/$(id -u)" "$PLIST"
+
+for _ in $(seq 1 60); do
+  api_responds && exit 0
+  sleep 0.5
+done
+echo "Ollama did not respond within 30s; see $LOG_DIR/ollama.log" >&2
+exit 1

@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+# Build the Llama Bar menu bar app, wrap it in a signed .app bundle, install it
+# into ~/Applications (override with INSTALL_DIR), register it with Launch
+# Services, and launch it. Usage: bin/build-app [--no-open]
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+PACKAGE="$ROOT/app"
+INSTALL_DIR="${INSTALL_DIR:-$HOME/Applications}"
+APP="$INSTALL_DIR/Llama Bar.app"
+PROCESS_NAME="LlamaBar"
+ICON_SCRIPT="$PACKAGE/scripts/make-icon.swift"
+ICON_CACHE="$PACKAGE/.build/AppIcon.icns"
+LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
+
+OPEN_AFTER_INSTALL=true
+[[ "${1:-}" == "--no-open" ]] && OPEN_AFTER_INSTALL=false
+
+mkdir -p "$INSTALL_DIR" "$PACKAGE/.build"
+WORK="$(mktemp -d)"
+STAGING="$(mktemp -d "$INSTALL_DIR/.build-app.XXXXXX")" # same volume as APP, so mv is a rename
+trap 'rm -rf "$WORK" "$STAGING"' EXIT
+
+build_icon() {
+  [[ -f "$ICON_CACHE" && "$ICON_CACHE" -nt "$ICON_SCRIPT" ]] && return
+
+  local iconset="$WORK/AppIcon.iconset" master="$WORK/icon-1024.png" size
+  mkdir "$iconset"
+  swift "$ICON_SCRIPT" "$master"
+  for size in 16 32 64 128 256 512 1024; do
+    sips -z "$size" "$size" "$master" --out "$WORK/icon-$size.png" >/dev/null
+  done
+  for size in 16 32 128 256 512; do
+    cp "$WORK/icon-$size.png" "$iconset/icon_${size}x${size}.png"
+    cp "$WORK/icon-$((size * 2)).png" "$iconset/icon_${size}x${size}@2x.png"
+  done
+  iconutil -c icns "$iconset" -o "$ICON_CACHE"
+}
+
+write_info_plist() {
+  local plist="$1"
+  plutil -create xml1 "$plist"
+  plutil -insert CFBundleIdentifier -string com.mcrolf.llama-bar "$plist"
+  plutil -insert CFBundleName -string "Llama Bar" "$plist"
+  plutil -insert CFBundleDisplayName -string "Llama Bar" "$plist"
+  plutil -insert CFBundleExecutable -string "$PROCESS_NAME" "$plist"
+  plutil -insert CFBundlePackageType -string APPL "$plist"
+  plutil -insert CFBundleShortVersionString -string 1.0 "$plist"
+  plutil -insert CFBundleVersion -string 1 "$plist"
+  plutil -insert CFBundleIconFile -string AppIcon "$plist"
+  plutil -insert LSMinimumSystemVersion -string 15.0 "$plist"
+  plutil -insert LSUIElement -bool true "$plist"
+  plutil -insert NSHighResolutionCapable -bool true "$plist"
+  plutil -insert LlamaBarRoot -string "$ROOT" "$plist"
+  plutil -lint "$plist" >/dev/null
+}
+
+assemble_bundle() {
+  local bundle="$STAGING/Llama Bar.app" bin_dir
+  bin_dir="$(swift build -c release --package-path "$PACKAGE" --show-bin-path)"
+  swift build -c release --package-path "$PACKAGE"
+  build_icon
+
+  mkdir -p "$bundle/Contents/MacOS" "$bundle/Contents/Resources"
+  cp "$bin_dir/$PROCESS_NAME" "$bundle/Contents/MacOS/$PROCESS_NAME"
+  cp "$ICON_CACHE" "$bundle/Contents/Resources/AppIcon.icns"
+  write_info_plist "$bundle/Contents/Info.plist"
+  codesign --force --sign - "$bundle"
+}
+
+quit_running_app() {
+  pkill -x "$PROCESS_NAME" || true
+  local attempt
+  for attempt in {1..50}; do
+    pgrep -x "$PROCESS_NAME" >/dev/null || return 0
+    sleep 0.1
+  done
+  echo "warning: $PROCESS_NAME is still running" >&2
+}
+
+install_bundle() {
+  quit_running_app
+  rm -rf "$APP"
+  mv "$STAGING/Llama Bar.app" "$APP"
+  "$LSREGISTER" -f "$APP"
+}
+
+assemble_bundle
+install_bundle
+$OPEN_AFTER_INSTALL && open "$APP"
+echo "Installed: $APP"

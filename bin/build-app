@@ -92,10 +92,21 @@ package_release() {
   mkdir -p "$ROOT/dist"
   local archive="$ROOT/dist/Llama-Bar-$version.zip"
   rm -f "$archive"
-  ditto -c -k --keepParent "$staged" "$archive"
+  # Without extended attributes: ditto would store them as ._ files, which unzip tools other
+  # than ditto extract as real files inside the signed bundle, and Gatekeeper rejects it.
+  ditto -c -k --norsrc --noextattr --keepParent "$staged" "$archive"
+  reject_appledouble_files "$archive"
   spctl --assess --type execute --verbose=2 "$staged"
   write_appcast "$archive" "$version"
   echo "Release: $archive and $ROOT/dist/appcast.xml"
+}
+
+reject_appledouble_files() {
+  local archive="$1"
+  if zipinfo -1 "$archive" | grep -q '\(^\|/\)\._'; then
+    echo "$archive contains ._ files; Gatekeeper would reject the extracted app." >&2
+    exit 1
+  fi
 }
 
 # Only release builds get a feed; Updater.swift leaves updates off without one.
@@ -166,6 +177,8 @@ assemble_bundle() {
   ditto "$bin_dir/Sparkle.framework" "$bundle/Contents/Frameworks/Sparkle.framework"
   cp "$ICON_CACHE" "$bundle/Contents/Resources/AppIcon.icns"
   write_info_plist "$bundle/Contents/Info.plist" "$version"
+  # SwiftPM's downloaded Sparkle carries com.apple.provenance, even on its symlinks (-s).
+  xattr -crs "$bundle"
   echo "$bundle"
 }
 

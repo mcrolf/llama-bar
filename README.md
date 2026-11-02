@@ -6,7 +6,7 @@ coding-agent setup built on [OpenCode](https://opencode.ai).
 <img src="docs/menu-panel.png" alt="Llama Bar menu panel: Ollama server status, loaded models, OpenCode token usage by period and model, and actions" width="342">
 
 - **Spotlight launch:** Cmd+Space, "Llama Bar". Launching starts the Ollama server if it is down.
-- **Menu bar status:** a cube that fills in and shows memory use while a model is loaded.
+- **Menu bar status:** a llama that shows memory use while a model is loaded and dims when Ollama is down.
   Click it for server status, loaded models, and OpenCode token usage (today, 7 days, 30 days, all time).
 - **Configuration Manager:** pull models from the Ollama library with progress, see installed
   models, choose the default model, load, unload, or delete models, and tune the server's
@@ -36,7 +36,7 @@ Llama Bar is an independent project and is not affiliated with Ollama or OpenCod
 
 1. Download `Llama-Bar-<version>.zip` from [Releases](https://github.com/mcrolf/llama-bar/releases)
    and move **Llama Bar.app** to Applications. Releases are signed and notarized by Apple.
-2. Open it (Cmd+Space, "Llama Bar"), click the cube in the menu bar, and choose
+2. Open it (Cmd+Space, "Llama Bar"), click the llama in the menu bar, and choose
    **Run Setup in Terminal**. Setup installs Ollama and OpenCode with Homebrew, starts the
    Ollama server, and downloads the default model (`devstral-small-2:24b`, 15 GB).
 

@@ -1,17 +1,19 @@
 import SwiftUI
 
-/// The menu bar icon: hollow when Ollama is down, filled with memory use while a model is loaded.
+/// The menu bar llama: dimmed when Ollama is down, with memory use while a model is loaded.
 struct MenuBarLabel: View {
     let server: ServerMonitor
 
     var body: some View {
-        if !server.isReachable {
-            Image(systemName: "cube.transparent")
-        } else if server.loadedModels.isEmpty {
-            Image(systemName: "cube")
+        if server.loadedModels.isEmpty {
+            glyph.opacity(server.isReachable ? 1 : 0.4)
         } else {
-            Label(server.loadedMemory.byteCount, systemImage: "cube.fill")
+            Label { Text(server.loadedMemory.byteCount) } icon: { glyph }
                 .labelStyle(.titleAndIcon)
         }
+    }
+
+    private var glyph: Image {
+        Image(nsImage: LlamaGlyph.image)
     }
 }

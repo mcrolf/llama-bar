@@ -1,3 +1,5 @@
+<img src="docs/poly.png" alt="Llama Bar icon: a tipsy low-poly llama on a purple tile" width="128" align="right">
+
 # Llama Bar
 
 A macOS menu bar app for running local [Ollama](https://ollama.com) models, with a

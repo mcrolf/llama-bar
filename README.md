@@ -3,6 +3,8 @@
 A macOS menu bar app for running local [Ollama](https://ollama.com) models, with a
 coding-agent setup built on [OpenCode](https://opencode.ai).
 
+<img src="docs/menu-panel.png" alt="Llama Bar menu panel: Ollama server status, loaded models, OpenCode token usage by period and model, and actions" width="342">
+
 - **Spotlight launch:** Cmd+Space, "Llama Bar". Launching starts the Ollama server if it is down.
 - **Menu bar status:** a cube that fills in and shows memory use while a model is loaded.
   Click it for server status, loaded models, and OpenCode token usage (today, 7 days, 30 days, all time).

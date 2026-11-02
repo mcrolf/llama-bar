@@ -1,31 +1,135 @@
 #!/usr/bin/env bash
-# Build the Llama Bar menu bar app, wrap it in a signed .app bundle, install it
-# into ~/Applications (override with INSTALL_DIR), register it with Launch
-# Services, and launch it. Usage: bin/build-app [--no-open]
+# Build the Llama Bar menu bar app.
+#
+#   bin/build-app [--no-open]         Install ~/Applications/Llama Bar.app (override with
+#                                     INSTALL_DIR), ad hoc signed, driving this checkout.
+#   bin/build-app --release <version> Write dist/Llama-Bar-<version>.zip: self-contained,
+#                                     Developer ID signed and notarized, for GitHub releases.
+#
+# Releases need a Developer ID Application certificate (override with SIGNING_IDENTITY)
+# and notarytool credentials saved as the keychain profile NOTARY_PROFILE (default
+# "llama-bar"): xcrun notarytool store-credentials llama-bar --apple-id <id> --team-id <team>
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
 PACKAGE="$ROOT/app"
-INSTALL_DIR="${INSTALL_DIR:-$HOME/Applications}"
-APP="$INSTALL_DIR/Llama Bar.app"
+APP_NAME="Llama Bar"
 PROCESS_NAME="LlamaBar"
 ICON_SCRIPT="$PACKAGE/scripts/make-icon.swift"
 ICON_CACHE="$PACKAGE/.build/AppIcon.icns"
 LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
+NOTARY_PROFILE="${NOTARY_PROFILE:-llama-bar}"
+# What a release copies into the app; see BundledRuntime.swift.
+RUNTIME_FILES=(
+  .env.example
+  bin/setup bin/configure-server bin/opencode-ollama bin/uninstall
+  launchd/com.mcrolf.llama-bar.ollama.plist.template
+  opencode/generate_config.py opencode/opencode.json
+)
 
-OPEN_AFTER_INSTALL=true
-[[ "${1:-}" == "--no-open" ]] && OPEN_AFTER_INSTALL=false
-
-mkdir -p "$INSTALL_DIR" "$PACKAGE/.build"
 WORK="$(mktemp -d)"
-STAGING="$(mktemp -d "$INSTALL_DIR/.build-app.XXXXXX")" # same volume as APP, so mv is a rename
-trap 'rm -rf "$WORK" "$STAGING"' EXIT
+trap 'rm -rf "$WORK"' EXIT
+
+main() {
+  case "${1:-}" in
+    --release) [[ -n "${2:-}" ]] || usage; package_release "$2" ;;
+    --no-open) install_local false ;;
+    "") install_local true ;;
+    *) usage ;;
+  esac
+}
+
+usage() {
+  echo "usage: bin/build-app [--no-open] | --release <version>" >&2
+  exit 2
+}
+
+install_local() {
+  local open_after_install="$1"
+  local install_dir="${INSTALL_DIR:-$HOME/Applications}"
+  local app="$install_dir/$APP_NAME.app"
+  local staged
+  staged="$(assemble_bundle 1.0.0)"
+  plutil -insert LlamaBarRoot -string "$ROOT" "$staged/Contents/Info.plist"
+  codesign --force --sign - "$staged"
+
+  mkdir -p "$install_dir"
+  quit_running_app
+  rm -rf "$app"
+  # ditto rather than mv: the staging dir may be on another volume.
+  ditto "$staged" "$app"
+  "$LSREGISTER" -f "$app"
+  $open_after_install && open "$app"
+  echo "Installed: $app"
+}
+
+package_release() {
+  local version="$1"
+  local identity
+  identity="$(signing_identity)"
+  local staged
+  staged="$(assemble_bundle "$version")"
+  copy_runtime "$staged/Contents/Resources/runtime"
+  codesign --force --options runtime --timestamp --sign "$identity" "$staged"
+  codesign --verify --strict --verbose=2 "$staged"
+
+  notarize "$staged"
+  mkdir -p "$ROOT/dist"
+  local archive="$ROOT/dist/Llama-Bar-$version.zip"
+  rm -f "$archive"
+  ditto -c -k --keepParent "$staged" "$archive"
+  spctl --assess --type execute --verbose=2 "$staged"
+  echo "Release: $archive"
+}
+
+signing_identity() {
+  if [[ -n "${SIGNING_IDENTITY:-}" ]]; then echo "$SIGNING_IDENTITY"; return; fi
+  local identity
+  identity="$(security find-identity -v -p codesigning | sed -n 's/.*"\(Developer ID Application: .*\)"/\1/p' | head -1)"
+  [[ -n "$identity" ]] || { echo "No Developer ID Application certificate in the keychain." >&2; exit 1; }
+  echo "$identity"
+}
+
+notarize() {
+  local app="$1" submission="$WORK/notarize.zip"
+  if ! xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1; then
+    echo "No notarytool credentials named '$NOTARY_PROFILE'. Save them once with:" >&2
+    echo "  xcrun notarytool store-credentials $NOTARY_PROFILE --apple-id <apple-id> --team-id <team-id>" >&2
+    exit 1
+  fi
+  ditto -c -k --keepParent "$app" "$submission"
+  xcrun notarytool submit "$submission" --keychain-profile "$NOTARY_PROFILE" --wait
+  xcrun stapler staple "$app"
+}
+
+# Prints the path of an unsigned bundle staged in $WORK. Build output goes to stderr so
+# callers can capture the path.
+assemble_bundle() {
+  local version="$1" bundle="$WORK/$APP_NAME.app" bin_dir
+  bin_dir="$(swift build -c release --package-path "$PACKAGE" --show-bin-path)"
+  swift build -c release --package-path "$PACKAGE" >&2
+  build_icon >&2
+
+  mkdir -p "$bundle/Contents/MacOS" "$bundle/Contents/Resources"
+  cp "$bin_dir/$PROCESS_NAME" "$bundle/Contents/MacOS/$PROCESS_NAME"
+  cp "$ICON_CACHE" "$bundle/Contents/Resources/AppIcon.icns"
+  write_info_plist "$bundle/Contents/Info.plist" "$version"
+  echo "$bundle"
+}
+
+copy_runtime() {
+  local runtime="$1" file
+  for file in "${RUNTIME_FILES[@]}"; do
+    mkdir -p "$runtime/$(dirname "$file")"
+    cp -p "$ROOT/$file" "$runtime/$file"
+  done
+}
 
 build_icon() {
   [[ -f "$ICON_CACHE" && "$ICON_CACHE" -nt "$ICON_SCRIPT" ]] && return
 
   local iconset="$WORK/AppIcon.iconset" master="$WORK/icon-1024.png" size
-  mkdir "$iconset"
+  mkdir -p "$iconset" "$(dirname "$ICON_CACHE")"
   swift "$ICON_SCRIPT" "$master"
   for size in 16 32 64 128 256 512 1024; do
     sips -z "$size" "$size" "$master" --out "$WORK/icon-$size.png" >/dev/null
@@ -38,34 +142,20 @@ build_icon() {
 }
 
 write_info_plist() {
-  local plist="$1"
+  local plist="$1" version="$2"
   plutil -create xml1 "$plist"
   plutil -insert CFBundleIdentifier -string com.mcrolf.llama-bar "$plist"
-  plutil -insert CFBundleName -string "Llama Bar" "$plist"
-  plutil -insert CFBundleDisplayName -string "Llama Bar" "$plist"
+  plutil -insert CFBundleName -string "$APP_NAME" "$plist"
+  plutil -insert CFBundleDisplayName -string "$APP_NAME" "$plist"
   plutil -insert CFBundleExecutable -string "$PROCESS_NAME" "$plist"
   plutil -insert CFBundlePackageType -string APPL "$plist"
-  plutil -insert CFBundleShortVersionString -string 1.0 "$plist"
-  plutil -insert CFBundleVersion -string 1 "$plist"
+  plutil -insert CFBundleShortVersionString -string "$version" "$plist"
+  plutil -insert CFBundleVersion -string "$version" "$plist"
   plutil -insert CFBundleIconFile -string AppIcon "$plist"
   plutil -insert LSMinimumSystemVersion -string 15.0 "$plist"
   plutil -insert LSUIElement -bool true "$plist"
   plutil -insert NSHighResolutionCapable -bool true "$plist"
-  plutil -insert LlamaBarRoot -string "$ROOT" "$plist"
   plutil -lint "$plist" >/dev/null
-}
-
-assemble_bundle() {
-  local bundle="$STAGING/Llama Bar.app" bin_dir
-  bin_dir="$(swift build -c release --package-path "$PACKAGE" --show-bin-path)"
-  swift build -c release --package-path "$PACKAGE"
-  build_icon
-
-  mkdir -p "$bundle/Contents/MacOS" "$bundle/Contents/Resources"
-  cp "$bin_dir/$PROCESS_NAME" "$bundle/Contents/MacOS/$PROCESS_NAME"
-  cp "$ICON_CACHE" "$bundle/Contents/Resources/AppIcon.icns"
-  write_info_plist "$bundle/Contents/Info.plist"
-  codesign --force --sign - "$bundle"
 }
 
 quit_running_app() {
@@ -78,14 +168,4 @@ quit_running_app() {
   echo "warning: $PROCESS_NAME is still running" >&2
 }
 
-install_bundle() {
-  quit_running_app
-  rm -rf "$APP"
-  mv "$STAGING/Llama Bar.app" "$APP"
-  "$LSREGISTER" -f "$APP"
-}
-
-assemble_bundle
-install_bundle
-$OPEN_AFTER_INSTALL && open "$APP"
-echo "Installed: $APP"
+main "$@"

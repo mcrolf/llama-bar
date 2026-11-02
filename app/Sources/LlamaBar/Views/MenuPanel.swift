@@ -12,6 +12,13 @@ struct MenuPanel: View {
         VStack(alignment: .leading, spacing: 12) {
             ServerHeader(server: server)
             Divider()
+            if !server.isSetUp {
+                SetupPrompt {
+                    dismissPanel()
+                    Desktop.runSetup()
+                }
+                Divider()
+            }
             LoadedModelsSection(server: server)
             Divider()
             UsageSection(usage: usage)
@@ -64,6 +71,23 @@ private struct ServerHeader: View {
 
     private var status: String {
         server.version.map { "Running v\($0)" } ?? "Not running"
+    }
+}
+
+/// Shown until bin/setup has installed the Ollama LaunchAgent.
+private struct SetupPrompt: View {
+    let runSetup: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionTitle("Finish Setup")
+            Text("Setup installs Ollama and OpenCode with Homebrew, starts the Ollama server, and downloads the default model (about 15 GB). Quit the Ollama app first if it is running.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Button("Run Setup in Terminal", action: runSetup)
+                .buttonStyle(.borderedProminent)
+        }
     }
 }
 

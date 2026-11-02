@@ -8,6 +8,7 @@ final class ServerMonitor {
     private(set) var version: String?
     private(set) var loadedModels: [LoadedModel] = []
     private(set) var lastError: String?
+    private(set) var isSetUp = ServerMonitor.hasRunSetup()
 
     private let client: OllamaClient
     private var polling: Task<Void, Never>?
@@ -36,6 +37,7 @@ final class ServerMonitor {
     }
 
     func refresh() async {
+        isSetUp = Self.hasRunSetup()
         do {
             version = try await client.version()
             loadedModels = try await client.loadedModels()
@@ -72,6 +74,10 @@ final class ServerMonitor {
         } catch {
             lastError = error.localizedDescription
         }
+    }
+
+    private static func hasRunSetup() -> Bool {
+        FileManager.default.fileExists(atPath: Project.serverLaunchAgent.path)
     }
 
     private static var serviceTarget: String { "gui/\(getuid())/\(Project.serverLabel)" }

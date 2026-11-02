@@ -30,6 +30,18 @@ Llama Bar is an independent project and is not affiliated with Ollama or OpenCod
 
 ## Install
 
+### Download (recommended)
+
+1. Download `Llama-Bar-<version>.zip` from [Releases](https://github.com/mcrolf/llama-bar/releases)
+   and move **Llama Bar.app** to Applications. Releases are signed and notarized by Apple.
+2. Open it (Cmd+Space, "Llama Bar"), click the cube in the menu bar, and choose
+   **Run Setup in Terminal**. Setup installs Ollama and OpenCode with Homebrew, starts the
+   Ollama server, and downloads the default model (`devstral-small-2:24b`, 15 GB).
+
+Its scripts and settings live in `~/Library/Application Support/Llama Bar`.
+
+### Build from source
+
 ```sh
 git clone https://github.com/mcrolf/llama-bar.git
 cd llama-bar
@@ -37,9 +49,9 @@ bin/setup       # installs ollama + opencode, starts the LaunchAgent, pulls the 
 bin/build-app   # builds ~/Applications/Llama Bar.app and launches it
 ```
 
-The app remembers where the repo is when it is built, so keep the clone in place (or rerun
-`bin/build-app` after moving it). The default model is `devstral-small-2:24b` (15 GB); to start
-with a different one, copy `.env.example` to `.env` and edit it before running `bin/setup`.
+A source build drives the clone it was built from, so keep the clone in place (or rerun
+`bin/build-app` after moving it). To start with a different model, copy `.env.example` to
+`.env` and edit it before running `bin/setup`.
 
 ## Using it
 
@@ -57,9 +69,9 @@ Ollama server, show the server log.
   keep-alive. Settings are saved to `.env`; changing a server setting restarts Ollama, which
   unloads loaded models.
 
-**OpenCode.** `bin/setup` links `opencode-ollama` into `~/.local/bin`. Run it for the OpenCode
-TUI, or point an app that supports OpenCode at it as the binary path. For T3 Code: add a
-provider with driver **OpenCode** and binary path `/path/to/llama-bar/bin/opencode-ollama`.
+**OpenCode.** Setup links `opencode-ollama` into `~/.local/bin`. Run it for the OpenCode TUI,
+or point an app that supports OpenCode at it as the binary path. For T3 Code: add a provider
+with driver **OpenCode** and binary path `~/.local/bin/opencode-ollama` (expanded to a full path).
 Each start lists every installed model; new models appear the next time OpenCode starts.
 
 Models that handle tool calls well work best for agentic coding:
@@ -71,7 +83,7 @@ Models that handle tool calls well work best for agentic coding:
 
 ## Configuration
 
-`.env` (copied from `.env.example`) holds the settings the Configuration Manager edits:
+`.env` (in the clone, or `~/Library/Application Support/Llama Bar` for downloads) holds the settings the Configuration Manager edits:
 
 | Variable | Default | Meaning |
 |---|---|---|
@@ -85,8 +97,10 @@ Server log: `~/Library/Logs/llama-bar/ollama.log`.
 ## Uninstall
 
 ```sh
-bin/uninstall   # removes the app, the LaunchAgent, and the opencode-ollama link
+bin/uninstall   # removes the app, the LaunchAgent, settings, and the opencode-ollama link
 ```
+
+For a download, run `~/Library/Application\ Support/Llama\ Bar/bin/uninstall`.
 
 Ollama, OpenCode, and downloaded models stay installed (`ollama rm <model>` frees disk space).
 
@@ -98,12 +112,21 @@ python3 -m unittest discover -s opencode      # config generator tests
 LLAMA_BAR_ROOT=$PWD swift run --package-path app   # run the app without bundling
 ```
 
+Releases (maintainer): save notarization credentials once, then build, tag, and upload.
+
+```sh
+xcrun notarytool store-credentials llama-bar --apple-id <apple-id> --team-id <team-id>
+bin/build-app --release 1.0.0                 # signs, notarizes, writes dist/Llama-Bar-1.0.0.zip
+gh release create v1.0.0 dist/Llama-Bar-1.0.0.zip --generate-notes
+```
+
 | Path | Purpose |
 |---|---|
 | `app/` | SwiftUI menu bar app (Swift package) |
 | `bin/setup` | Installs dependencies and pulls the default model |
 | `bin/configure-server` | Renders the LaunchAgent from `.env` and restarts Ollama |
-| `bin/build-app` | Builds, signs (ad hoc), and installs `Llama Bar.app` |
+| `bin/build-app` | Builds and installs `Llama Bar.app`, or packages a notarized release |
+| `bin/uninstall` | Removes the app, LaunchAgent, and settings |
 | `bin/opencode-ollama` | OpenCode launcher; generates its config from installed models |
 | `opencode/` | OpenCode config template and generator |
 | `launchd/` | LaunchAgent template for `ollama serve` |

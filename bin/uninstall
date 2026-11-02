@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
-# Remove Llama Bar, the Ollama LaunchAgent and the opencode-ollama link.
-# Downloaded models stay in ~/.ollama; delete them with `ollama rm <model>`.
+# Remove Llama Bar: the app, its Ollama LaunchAgent, its scripts and settings, and the
+# opencode-ollama link. Ollama, OpenCode and downloaded models (~/.ollama) are kept;
+# free disk space with `ollama rm <model>`.
 set -euo pipefail
 
 LABEL="com.mcrolf.llama-bar.ollama"
-APP="${INSTALL_DIR:-$HOME/Applications}/Llama Bar.app"
 LINK="${LINK_DIR:-$HOME/.local/bin}/opencode-ollama"
 
 pkill -x LlamaBar || true
-rm -rf "$APP"
+rm -rf "$HOME/Applications/Llama Bar.app"
+rm -rf "/Applications/Llama Bar.app" 2>/dev/null || echo "Drag /Applications/Llama Bar.app to the Trash." >&2
 launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
 rm -f "$HOME/Library/LaunchAgents/$LABEL.plist"
 [[ -L "$LINK" ]] && rm "$LINK"
-rm -rf "$HOME/Library/Logs/llama-bar"
+rm -rf "$HOME/Library/Logs/llama-bar" "$HOME/Library/Application Support/Llama Bar"
 echo "Llama Bar removed. Ollama, OpenCode and your models are still installed."

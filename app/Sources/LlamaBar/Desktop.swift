@@ -3,13 +3,23 @@ import AppKit
 /// Hand-offs to other macOS apps.
 @MainActor
 enum Desktop {
-    /// Runs the OpenCode TUI (bin/opencode-ollama) in iTerm when installed, otherwise Terminal.
+    /// Runs the OpenCode TUI (bin/opencode-ollama).
     static func openOpenCode(project: Project = .current) {
+        runInTerminal(project.launcher)
+    }
+
+    /// Runs bin/setup, which installs Ollama and OpenCode and downloads the default model.
+    static func runSetup(project: Project = .current) {
+        runInTerminal(project.setup)
+    }
+
+    /// Runs `script` in iTerm when installed, otherwise Terminal, so its output and prompts are visible.
+    private static func runInTerminal(_ script: URL) {
         let workspace = NSWorkspace.shared
         let terminal = ["com.googlecode.iterm2", "com.apple.Terminal"]
             .lazy.compactMap(workspace.urlForApplication(withBundleIdentifier:)).first
         guard let terminal else { return }
-        workspace.open([project.launcher], withApplicationAt: terminal, configuration: NSWorkspace.OpenConfiguration())
+        workspace.open([script], withApplicationAt: terminal, configuration: NSWorkspace.OpenConfiguration())
     }
 
     static func showServerLog() {

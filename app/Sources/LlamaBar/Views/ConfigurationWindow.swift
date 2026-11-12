@@ -6,6 +6,7 @@ struct ConfigurationWindow: View {
     let server: ServerMonitor
     let library: ModelLibrary
     let configuration: ServerConfiguration
+    let dependencies: DependencyUpdates
 
     var body: some View {
         TabView {
@@ -17,6 +18,9 @@ struct ConfigurationWindow: View {
             }
             Tab("Default Model", systemImage: "slider.horizontal.3") {
                 DefaultModelView(library: library, configuration: configuration)
+            }
+            Tab("Dependencies", systemImage: "arrow.triangle.2.circlepath") {
+                DependenciesView(updates: dependencies)
             }
         }
         .frame(minWidth: 760, minHeight: 460)

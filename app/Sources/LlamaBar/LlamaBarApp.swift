@@ -6,6 +6,7 @@ struct LlamaBarApp: App {
     private let usage: UsageMonitor
     private let library: ModelLibrary
     private let configuration: ServerConfiguration
+    private let dependencies: DependencyUpdates
     private let updater: Updater
 
     init() {
@@ -19,6 +20,7 @@ struct LlamaBarApp: App {
         usage = UsageMonitor()
         library = ModelLibrary()
         configuration = ServerConfiguration()
+        dependencies = DependencyUpdates(server: server)
         updater = Updater()
         server.start()
     }
@@ -32,7 +34,7 @@ struct LlamaBarApp: App {
         .menuBarExtraStyle(.window)
 
         Window("Configuration Manager", id: ConfigurationWindow.id) {
-            ConfigurationWindow(server: server, library: library, configuration: configuration)
+            ConfigurationWindow(server: server, library: library, configuration: configuration, dependencies: dependencies)
         }
         .defaultLaunchBehavior(.suppressed)
         .windowResizability(.contentMinSize)

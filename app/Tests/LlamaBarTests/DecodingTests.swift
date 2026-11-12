@@ -1,7 +1,7 @@
 import XCTest
 @testable import LlamaBar
 
-/// Pins the shapes of Ollama's API and `opencode stats --json` that the app relies on.
+/// Pins the shapes of Ollama's API, `opencode stats --json`, and `brew info --json=v2` that the app relies on.
 final class DecodingTests: XCTestCase {
     func testParsesOllamaNanosecondTimestamps() throws {
         let date = try XCTUnwrap(OllamaDate.parse("2026-11-01T20:43:20.085530254-05:00"))
@@ -26,6 +26,25 @@ final class DecodingTests: XCTestCase {
         let stats = try JSONDecoder().decode(UsageStats.self, from: Data(json.utf8))
         XCTAssertEqual(stats.tokens.cache.read, 1_011_233)
         XCTAssertEqual(stats.models?.first?.id, "ollama/gpt-oss:20b")
+    }
+
+    func testDecodesHomebrewFormulaVersions() throws {
+        let json = """
+        {"formulae": [
+          {"name": "ollama", "versions": {"stable": "0.40.16", "head": "HEAD", "bottle": true},
+           "linked_keg": "0.40.13", "outdated": true, "revision": 0,
+           "installed": [{"version": "0.40.12"}, {"version": "0.40.13"}]},
+          {"name": "opencode", "versions": {"stable": "2.2.7", "head": null, "bottle": true},
+           "linked_keg": null, "outdated": false, "revision": 0, "installed": []}
+        ], "casks": []}
+        """
+        let formulae = try Homebrew.decodeInfo(Data(json.utf8))
+        XCTAssertEqual(formulae.map(\.name), ["ollama", "opencode"])
+        XCTAssertEqual(formulae[0].installedVersion, "0.40.13")
+        XCTAssertEqual(formulae[0].latestVersion, "0.40.16")
+        XCTAssertTrue(formulae[0].isOutdated)
+        XCTAssertNil(formulae[1].installedVersion)
+        XCTAssertFalse(formulae[1].isOutdated)
     }
 
     func testCompactCounts() {

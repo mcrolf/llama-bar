@@ -11,8 +11,8 @@ coding-agent setup built on [OpenCode](https://opencode.ai).
 - **Menu bar status:** a llama that shows memory use while a model is loaded and dims when Ollama is down.
   Click it for server status, loaded models, and OpenCode token usage (today, 7 days, 30 days, all time).
 - **Configuration Manager:** pull models from the Ollama library with progress, see installed
-  models, choose the default model, load, unload, or delete models, and tune the server's
-  context length and keep-alive.
+  models, choose the default model, load, unload, or delete models, tune the server's
+  context length and keep-alive, and update Ollama and OpenCode.
 - **OpenCode launcher:** `opencode-ollama` runs OpenCode with every installed Ollama model,
   in a terminal or as a provider for apps such as T3 Code.
 
@@ -77,6 +77,9 @@ Ollama server, show the server log, and (downloads only) check for updates.
 - *Default Model*: the model OpenCode starts new sessions with, plus server context length and
   keep-alive. Settings are saved to `.env`; changing a server setting restarts Ollama, which
   unloads loaded models.
+- *Dependencies*: the installed and latest Homebrew versions of Ollama and OpenCode, with an
+  Update button when a new version is out. Updating Ollama restarts the server, which unloads
+  loaded models. Tools installed without Homebrew show their status but can't be updated here.
 
 **OpenCode.** Setup links `opencode-ollama` into `~/.local/bin`. Run it for the OpenCode TUI,
 or point an app that supports OpenCode at it as the binary path. For T3 Code: add a provider
